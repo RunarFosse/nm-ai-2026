@@ -50,7 +50,7 @@ def path_to_actions(path: List[List[int]], start: List[int]) -> List[Dict[str, s
 
     return actions
 
-def navigate_to_item(graph: List[List[List[int]]], item_positions: Dict[str, Tuple[str, List[int]]], start: List[int], item_type: str) -> Tuple[List[str | Tuple[str, str]], int]:
+def navigate_to_item(graph: List[List[List[int]]], item_positions: Dict[str, Tuple[str, List[int]]], start: List[int], item_type: str) -> Tuple[List[str | Tuple[str, str]], int, List[int]]:
     items = item_positions[item_type]
     best = ([], 1e9, None)
     for item_id, position in items:
@@ -67,7 +67,7 @@ def navigate_to_item(graph: List[List[List[int]]], item_positions: Dict[str, Tup
         return [], 1e9
 
     plan = path_to_actions(best[0], start) + [{"action": "pick_up", "item_id": best[2]}]
-    return plan, best[1]
+    return plan, best[1], (start if not best[0] else best[0][-1])
 
 def navigate_to_position(graph: List[List[List[int]]], start: List[int], target: List[int]) -> Tuple[List[str], int]:
     path, distance = a_start_pathfinding(graph, start, target)

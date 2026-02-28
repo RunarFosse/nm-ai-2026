@@ -2,7 +2,7 @@ from typing import List
 from schemas import *
 
 from utils import constructGraph, mapOutItems, computeDistances
-from paths import a_start_pathfinding, navigate_to_item, navigate_to_position
+from paths import a_start_pathfinding, navigate_to_item, navigate_to_position, manhattan_heuristic
  
 class EasyStrategy():
     def __init__(self):
@@ -37,14 +37,23 @@ class EasyStrategy():
         # Find missing items
         missing = order["items_required"]
         for item in bot["inventory"] + order["items_delivered"]:
-            missing.remove(item)
+            if item in missing:
+                missing.remove(item)
 
         #print(bot["inventory"])
         #print(order)
 
+        missing.sort(key=lambda item_type: navigate_to_item(self.graph, self.item_positions, bot["position"], item_type)[1])
+
         if missing and len(bot["inventory"]) < 3:
             # Navigate to the closest, first item, not grabbed
-            plan, _ = navigate_to_item(self.graph, self.item_positions, bot["position"], missing[0])
+            plan, distance, end = navigate_to_item(self.graph, self.item_positions, bot["position"], missing[0])
+
+            if distance + 1 + self.distance_to_drop_off[end[1]][end[0]] > 300 - self.state["round"]:
+                plan, distance = navigate_to_position(self.graph, bot["position"], self.state["drop_off"])
+                if distance == 0:
+                    return {"action": "drop_off"}
+
         else:  
             plan, distance = navigate_to_position(self.graph, bot["position"], self.state["drop_off"])
             if distance == 0:
