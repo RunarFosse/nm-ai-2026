@@ -3,12 +3,12 @@ import json
 import websockets
 from tqdm import tqdm
 
-from example_strategy import ExampleStrategy
+from easy_strategy import EasyStrategy
 
 WS_URL = open(".ws_url").readline()
 ROUNDS = 300
 
-strategy = ExampleStrategy()
+strategy = EasyStrategy()
  
 async def play():
     async with websockets.connect(WS_URL) as ws:
