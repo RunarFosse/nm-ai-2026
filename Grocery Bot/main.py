@@ -21,7 +21,7 @@ async def play():
                 print(f"Game over! Score: {state['score']}")
                 break
  
-            actions = strategy.predict(state)
+            actions = strategy.step(state)
             await ws.send(json.dumps({"actions": actions}))
             progress.update()
 

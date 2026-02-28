@@ -5,7 +5,7 @@ class ExampleStrategy():
     def __init__(self):
         pass
  
-    def predict(self, state: State) -> Response:
+    def step(self, state: State) -> Response:
         self.state = state
 
         actions = []
