@@ -25,7 +25,7 @@ class EasyStrategy():
         for bot in self.state["bots"]:
             action = self.act(bot)
             actions.append({"bot": bot["id"]} | action)
-        print(actions)
+        #print(actions)
         return actions
 
     def act(self, bot: Bot) -> Action:
@@ -41,7 +41,7 @@ class EasyStrategy():
                 missing.remove(item)
 
         #print(bot["inventory"])
-        #print(order)
+        print(order)
 
         missing.sort(key=lambda item_type: navigate_to_item(self.graph, self.item_positions, bot["position"], item_type)[1])
 
