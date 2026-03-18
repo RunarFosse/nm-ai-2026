@@ -14,3 +14,13 @@ Activate the environment:
 Install required dependencies:
 
 ```pip install -r requirements.txt```
+
+## WebSockets token storage
+
+Create a hidden (by default) ```.ws_url``` file containing only the WebSocket API token.
+
+Load it in Python through:
+
+```python
+WS_URL = open(".ws_url").readline()
+```
