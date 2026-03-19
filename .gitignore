@@ -1,6 +1,9 @@
 # WebSockets URL
 .ws_url
 
+# Gemini
+.gemini
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
