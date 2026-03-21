@@ -27,7 +27,7 @@ CREATE_PROJECT = FunctionDeclaration(
             "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
             "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
         },
-        "required": ["name", "customer_id", "project_manager_id"],
+        "required": ["name", "customer_id", "project_manager_id", "start_date"],
     },
 )
 
@@ -46,7 +46,7 @@ def create_project(
     name: str,
     customer_id: int,
     project_manager_id: int,
-    start_date: str = None,
+    start_date: str,
     end_date: str = None,
     **_,
 ) -> dict:
@@ -56,14 +56,15 @@ def create_project(
         raise ValueError("customer_id is required")
     if not project_manager_id:
         raise ValueError("project_manager_id is required")
+    if not start_date:
+        raise ValueError("start_date is required (YYYY-MM-DD)")
 
     body = {
         "name": name.strip(),
         "customer": {"id": customer_id},
         "projectManager": {"id": project_manager_id},
+        "startDate": start_date,
     }
-    if start_date:
-        body["startDate"] = start_date
     if end_date:
         body["endDate"] = end_date
 

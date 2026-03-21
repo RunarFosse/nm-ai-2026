@@ -23,8 +23,8 @@ CREATE_PRODUCT = FunctionDeclaration(
         "properties": {
             "name": {"type": "string", "description": "Product name"},
             "number": {"type": "string", "description": "Product number / SKU"},
-            "price_ex_vat": {"type": "number", "description": "Unit price excl. VAT"},
-            "vat_type_id": {"type": "integer", "description": "VAT type ID (3 = standard 25%)"},
+            "price_ex_vat": {"type": "number", "description": "Unit price excl. VAT (alias: cost_excluding_vat_currency)"},
+            "cost_excluding_vat_currency": {"type": "number", "description": "Unit cost excl. VAT (same as price_ex_vat)"},
         },
         "required": ["name"],
     },
@@ -45,7 +45,7 @@ def create_product(
     name: str,
     number: str = None,
     price_ex_vat: float = None,
-    vat_type_id: int = None,
+    cost_excluding_vat_currency: float = None,
     **_,
 ) -> dict:
     if not name or not name.strip():
@@ -54,9 +54,8 @@ def create_product(
     body = {"name": name.strip()}
     if number:
         body["number"] = number.strip()
-    if price_ex_vat is not None:
-        body["costExcludingVatCurrency"] = price_ex_vat
-    if vat_type_id is not None:
-        body["vatType"] = {"id": vat_type_id}
+    price = price_ex_vat if price_ex_vat is not None else cost_excluding_vat_currency
+    if price is not None:
+        body["costExcludingVatCurrency"] = price
 
     return client.post("/product", json=body)

@@ -21,13 +21,34 @@ from config import settings
 def seed(client: TripletexClient) -> None:
     print("Seeding Tripletex sandbox...\n")
 
-    # --- Employees ---
-    print("Creating employees...")
+    # --- Department (required before employee) ---
+    print("Creating department...")
+    dept_id = None
     try:
-        emp = client.post(
-            "/employee",
-            json={"firstName": "Test", "lastName": "Manager", "email": "manager@test.no", "userType": "STANDARD"},
-        )
+        dept_resp = client.get("/department", params={"fields": "id,name", "count": 1})
+        existing_depts = dept_resp.get("values", [])
+        if existing_depts:
+            dept_id = existing_depts[0]["id"]
+            print(f"  Department already exists: id={dept_id} ({existing_depts[0]['name']})")
+        else:
+            dept = client.post("/department", json={"name": "General"})
+            dept_id = dept["value"]["id"]
+            print(f"  Department created: id={dept_id} (General)")
+    except TripletexError as e:
+        print(f"  Department setup failed: {e}")
+
+    # --- Employees ---
+    print("\nCreating employees...")
+    try:
+        emp_body = {
+            "firstName": "Test",
+            "lastName": "Manager",
+            "email": "manager@test.no",
+            "userType": "STANDARD",
+        }
+        if dept_id:
+            emp_body["department"] = {"id": dept_id}
+        emp = client.post("/employee", json=emp_body)
         emp_id = emp["value"]["id"]
         print(f"  Employee created: id={emp_id} (Test Manager)")
     except TripletexError as e:

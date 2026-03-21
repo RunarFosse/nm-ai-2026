@@ -50,6 +50,13 @@ from tools.travel_expense import (
     delete_travel_expense,
     list_travel_expenses,
 )
+from tools.call_api import CALL_API, call_api
+from tools.schema_tools import (
+    GET_ENDPOINT_SCHEMA,
+    LIST_ENDPOINTS,
+    get_endpoint_schema,
+    list_endpoints,
+)
 from tools.voucher import (
     CREATE_VOUCHER,
     LIST_ACCOUNTS,
@@ -92,6 +99,11 @@ ALL_DECLARATIONS = [
     LIST_VOUCHERS,
     CREATE_VOUCHER,
     LIST_ACCOUNTS,
+    # Generic escape hatch
+    CALL_API,
+    # API discovery
+    LIST_ENDPOINTS,
+    GET_ENDPOINT_SCHEMA,
 ]
 
 GEMINI_TOOL = Tool(function_declarations=ALL_DECLARATIONS)
@@ -120,4 +132,7 @@ TOOL_MAP: dict = {
     "list_vouchers": list_vouchers,
     "create_voucher": create_voucher,
     "list_accounts": list_accounts,
+    "call_api": call_api,
+    "list_endpoints": list_endpoints,
+    "get_endpoint_schema": get_endpoint_schema,
 }

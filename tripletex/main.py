@@ -56,7 +56,11 @@ async def solve(request: Request, body: SolveRequest):
     )
 
     try:
-        run_agent(prompt=body.prompt, client=client)
+        run_agent(
+            prompt=body.prompt,
+            client=client,
+            files=[f.model_dump() for f in body.files],
+        )
     except Exception as exc:
         logger.exception("Agent failed: %s", exc)
         # Still return completed — the grader checks Tripletex state directly

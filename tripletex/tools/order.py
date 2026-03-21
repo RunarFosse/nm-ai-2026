@@ -53,18 +53,28 @@ def create_order(
     body = {
         "customer": {"id": customer_id},
         "orderDate": order_date,
+        "deliveryDate": delivery_date or order_date,
     }
-    if delivery_date:
-        body["deliveryDate"] = delivery_date
     if order_lines:
         body["orderLines"] = [
             {
-                **({"product": {"id": line["product_id"]}} if "product_id" in line else {}),
+                # product: accept product_id (int), product (nested dict), or productId
+                **(
+                    {"product": {"id": line["product_id"]}} if "product_id" in line
+                    else {"product": line["product"]} if "product" in line
+                    else {"product": {"id": line["productId"]}} if "productId" in line
+                    else {}
+                ),
                 **({"description": line["description"]} if "description" in line else {}),
                 **({"count": line["count"]} if "count" in line else {}),
+                # price: accept snake_case variants and camelCase
                 **(
-                    {"unitPriceExVat": line["unit_price_ex_vat"]}
-                    if "unit_price_ex_vat" in line
+                    {"unitPriceExcludingVatCurrency": (
+                        line.get("unit_price_ex_vat")
+                        or line.get("unit_price_excluding_vat_currency")
+                        or line.get("unitPriceExcludingVatCurrency")
+                    )}
+                    if any(k in line for k in ("unit_price_ex_vat", "unit_price_excluding_vat_currency", "unitPriceExcludingVatCurrency"))
                     else {}
                 ),
             }

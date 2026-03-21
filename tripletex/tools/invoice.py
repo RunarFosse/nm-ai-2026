@@ -76,13 +76,11 @@ def list_invoices(
     params = {
         "fields": "id,invoiceNumber,customer,invoiceDate,amountCurrency,amountOutstanding",
         "count": 100,
+        "invoiceDateFrom": invoice_date_from or "1900-01-01",
+        "invoiceDateTo": invoice_date_to or "2099-12-31",
     }
     if customer_id:
         params["customerId"] = customer_id
-    if invoice_date_from:
-        params["invoiceDateFrom"] = invoice_date_from
-    if invoice_date_to:
-        params["invoiceDateTo"] = invoice_date_to
     return client.get("/invoice", params=params)
 
 
@@ -130,14 +128,14 @@ def register_payment(
         raise ValueError("payment_type_id is required — use list_payment_types to find valid IDs")
 
     return client.post(
-        f"/invoice/{invoice_id}/:createReminder",
-        json={
-            "amount": amount,
+        f"/invoice/{invoice_id}/:registerPayment",
+        params={
             "paymentDate": payment_date,
-            "paymentType": {"id": payment_type_id},
+            "amount": amount,
+            "paymentTypeId": payment_type_id,
         },
     )
 
 
 def list_payment_types(client: TripletexClient, **_) -> dict:
-    return client.get("/invoice/paymentType", params={"fields": "id,name", "count": 100})
+    return client.get("/invoice/paymentType", params={"fields": "id,description", "count": 100})
