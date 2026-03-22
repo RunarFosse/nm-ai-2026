@@ -1,3 +1,4 @@
+import json
 import logging
 
 from vertexai.generative_models import FunctionDeclaration
@@ -69,17 +70,27 @@ def call_api(
     client: TripletexClient,
     method: str,
     endpoint: str = None,
-    body: dict = None,
+    body=None,
     params: dict = None,
     path: str = None,
+    query_params: dict = None,
     **_,
 ):
     # Accept 'path' as alias for 'endpoint'
     if endpoint is None:
         endpoint = path
+    # Accept 'query_params' as alias for 'params'
+    if params is None and query_params:
+        params = query_params
     if not endpoint:
         raise ValueError("endpoint (or path) is required")
     method = method.upper()
+    # Normalise body: accept JSON strings (model sometimes serialises before calling)
+    if isinstance(body, str):
+        try:
+            body = json.loads(body) if body.strip() else None
+        except Exception:
+            body = None
     if body and method in ("POST", "PUT"):
         body = _validate_body(endpoint, method, body)
 

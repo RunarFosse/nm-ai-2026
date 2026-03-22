@@ -63,14 +63,14 @@ class TripletexClient:
         resp = requests.post(self._url(path), auth=self.auth, **kwargs)
         self._log_response(resp)
         self._raise_for_status(resp)
-        return resp.json()
+        return resp.json() if resp.content else {"ok": True, "status": resp.status_code}
 
     def put(self, path: str, **kwargs) -> dict:
         self._log_request("PUT", path, kwargs)
         resp = requests.put(self._url(path), auth=self.auth, **kwargs)
         self._log_response(resp)
         self._raise_for_status(resp)
-        return resp.json()
+        return resp.json() if resp.content else {"ok": True, "status": resp.status_code}
 
     def delete(self, path: str, **kwargs) -> None:
         logger.info("→ DELETE %s", path)

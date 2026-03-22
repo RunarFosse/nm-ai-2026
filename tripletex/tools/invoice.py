@@ -28,7 +28,7 @@ CREATE_INVOICE = FunctionDeclaration(
         "properties": {
             "order_id": {"type": "integer", "description": "Tripletex order ID to invoice"},
             "invoice_date": {"type": "string", "description": "Invoice date (YYYY-MM-DD)"},
-            "invoice_due_date": {"type": "string", "description": "Payment due date (YYYY-MM-DD)"},
+            "invoice_due_date": {"type": "string", "description": "Payment due date (YYYY-MM-DD) — REQUIRED, typically 14-30 days after invoice_date"},
             "send_types": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -41,7 +41,7 @@ CREATE_INVOICE = FunctionDeclaration(
 
 REGISTER_PAYMENT = FunctionDeclaration(
     name="register_payment",
-    description="Register a payment against an invoice.",
+    description="Register a payment against an invoice. Uses PUT /invoice/{id}/:payment.",
     parameters={
         "type": "object",
         "properties": {
@@ -104,10 +104,16 @@ def create_invoice(
         "invoiceDueDate": invoice_due_date,
         "orders": [{"id": order_id}],
     }
-    if send_types:
-        body["sendTypes"] = send_types
+    result = client.post("/invoice", json=body)
 
-    return client.post("/invoice", json=body)
+    # Send the invoice via the separate :send endpoint if send_types requested
+    if send_types:
+        invoice_id = (result.get("value") or {}).get("id") or result.get("id")
+        if invoice_id:
+            for send_type in send_types:
+                client.put(f"/invoice/{invoice_id}/:send", params={"sendType": send_type})
+
+    return result
 
 
 def register_payment(
@@ -127,11 +133,11 @@ def register_payment(
     if not payment_type_id:
         raise ValueError("payment_type_id is required — use list_payment_types to find valid IDs")
 
-    return client.post(
-        f"/invoice/{invoice_id}/:registerPayment",
+    return client.put(
+        f"/invoice/{invoice_id}/:payment",
         params={
             "paymentDate": payment_date,
-            "amount": amount,
+            "paidAmount": amount,
             "paymentTypeId": payment_type_id,
         },
     )

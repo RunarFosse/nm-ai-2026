@@ -15,6 +15,7 @@ class Settings:
     sandbox_token: str = os.getenv("TRIPLETEX_SANDBOX_TOKEN", "")
 
     api_key: str = os.getenv("API_KEY", "")
+    dev_mode: bool = os.getenv("DEV_MODE", "false").lower() == "true"
 
 
 settings = Settings()

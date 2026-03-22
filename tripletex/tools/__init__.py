@@ -57,6 +57,12 @@ from tools.schema_tools import (
     get_endpoint_schema,
     list_endpoints,
 )
+from tools.knowledge_tools import (
+    GET_ENDPOINT_NOTES,
+    UPDATE_ENDPOINT_NOTES,
+    get_endpoint_notes,
+    update_endpoint_notes,
+)
 from tools.voucher import (
     CREATE_VOUCHER,
     LIST_ACCOUNTS,
@@ -125,6 +131,23 @@ RESEARCH_DECLARATIONS = [
 ]
 RESEARCH_TOOL = Tool(function_declarations=RESEARCH_DECLARATIONS)
 
+# Plan tool: list tools + endpoint discovery (no schema — loaded by code) + notes
+PLAN_DECLARATIONS = [
+    LIST_EMPLOYEES,
+    LIST_CUSTOMERS,
+    LIST_PRODUCTS,
+    LIST_INVOICES,
+    LIST_PAYMENT_TYPES,
+    LIST_TRAVEL_EXPENSES,
+    LIST_PROJECTS,
+    LIST_DEPARTMENTS,
+    LIST_VOUCHERS,
+    LIST_ACCOUNTS,
+    LIST_ENDPOINTS,
+    GET_ENDPOINT_NOTES,
+]
+PLAN_TOOL = Tool(function_declarations=PLAN_DECLARATIONS)
+
 TOOL_MAP: dict = {
     "list_employees": list_employees,
     "create_employee": create_employee,
@@ -152,4 +175,6 @@ TOOL_MAP: dict = {
     "call_api": call_api,
     "list_endpoints": list_endpoints,
     "get_endpoint_schema": get_endpoint_schema,
+    "get_endpoint_notes": get_endpoint_notes,
+    "update_endpoint_notes": update_endpoint_notes,
 }

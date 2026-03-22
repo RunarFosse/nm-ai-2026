@@ -33,7 +33,6 @@ CREATE_EMPLOYEE = FunctionDeclaration(
                 "type": "integer",
                 "description": "Tripletex department ID. If omitted, the tool uses the first existing department or creates a default one.",
             },
-            "is_account_manager": {"type": "boolean", "description": "Grant account manager role"},
         },
         "required": ["first_name", "last_name"],
     },
@@ -50,7 +49,6 @@ UPDATE_EMPLOYEE = FunctionDeclaration(
             "last_name": {"type": "string"},
             "email": {"type": "string"},
             "phone_number_mobile": {"type": "string"},
-            "is_account_manager": {"type": "boolean"},
         },
         "required": ["employee_id"],
     },
@@ -84,7 +82,6 @@ def create_employee(
     email: str = None,
     phone_number_mobile: str = None,
     department_id: int = None,
-    is_account_manager: bool = False,
     **_,
 ) -> dict:
     if not first_name or not first_name.strip():
@@ -105,13 +102,7 @@ def create_employee(
     if phone_number_mobile:
         body["phoneNumberMobile"] = phone_number_mobile.strip()
 
-    result = client.post("/employee", json=body)
-    employee_id = result["value"]["id"]
-
-    if is_account_manager:
-        client.put(f"/employee/{employee_id}/employeeRole", json={"administrator": True})
-
-    return result
+    return client.post("/employee", json=body)
 
 
 def update_employee(
@@ -121,7 +112,6 @@ def update_employee(
     last_name: str = None,
     email: str = None,
     phone_number_mobile: str = None,
-    is_account_manager: bool = None,
     **_,
 ) -> dict:
     if not employee_id:
@@ -139,12 +129,4 @@ def update_employee(
     if phone_number_mobile is not None:
         body["phoneNumberMobile"] = phone_number_mobile.strip()
 
-    result = client.put(f"/employee/{employee_id}", json=body)
-
-    if is_account_manager is not None:
-        client.put(
-            f"/employee/{employee_id}/employeeRole",
-            json={"administrator": is_account_manager},
-        )
-
-    return result
+    return client.put(f"/employee/{employee_id}", json=body)

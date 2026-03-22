@@ -47,8 +47,8 @@ LIST_ACCOUNTS = FunctionDeclaration(
     parameters={
         "type": "object",
         "properties": {
-            "number_from": {"type": "integer", "description": "Filter accounts from this number"},
-            "number_to": {"type": "integer", "description": "Filter accounts up to this number"},
+            "number": {"type": "integer", "description": "Filter by exact account number (e.g. 1920)"},
+            "is_bank_account": {"type": "boolean", "description": "Filter to bank accounts only"},
         },
     },
 )
@@ -104,13 +104,13 @@ def create_voucher(
 
 def list_accounts(
     client: TripletexClient,
-    number_from: int = None,
-    number_to: int = None,
+    number: int = None,
+    is_bank_account: bool = None,
     **_,
 ) -> dict:
-    params = {"fields": "id,number,name", "count": 200}
-    if number_from is not None:
-        params["numberFrom"] = number_from
-    if number_to is not None:
-        params["numberTo"] = number_to
+    params = {"fields": "id,number,name,bankAccountNumber", "count": 200}
+    if number is not None:
+        params["number"] = number
+    if is_bank_account is not None:
+        params["isBankAccount"] = is_bank_account
     return client.get("/ledger/account", params=params)
