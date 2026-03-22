@@ -7,8 +7,10 @@
 # Ignore Data folders
 *data/
 
-# Ignore PyTorch files
+# Ignore PyTorch and ONNX files, as well as zip
 *.pt
+*.onnx
+*.zip
 
 # Mac .DS_Store
 *.DS_Store
