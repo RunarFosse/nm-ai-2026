@@ -1,6 +1,12 @@
 # nm-ai-2026
 Levi Hackerman's repository for NM in AI 2026
 
+## Huggingface repository
+
+Model parameters for Norgesgruppen Data Task:
+
+[https://huggingface.co/RunarFosse/nm-ai-2026](https://huggingface.co/RunarFosse/nm-ai-2026)
+
 ## Quick start
 
 Create a Python virtual environment:
