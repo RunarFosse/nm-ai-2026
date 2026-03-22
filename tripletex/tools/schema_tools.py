@@ -202,6 +202,19 @@ def list_endpoints(client=None, tag: str = None, query: str = None, **_) -> dict
     return {"count": len(results), "results": results}
 
 
+def get_required_params(path: str, method: str) -> list[str]:
+    """Return names of required query parameters for a path+method."""
+    spec = _get_spec()
+    spec_path = _match_spec_path(spec, path)
+    if not spec_path:
+        return []
+    op = spec["paths"].get(spec_path, {}).get(method.lower(), {})
+    return [
+        p["name"] for p in op.get("parameters", [])
+        if p.get("in") == "query" and p.get("required")
+    ]
+
+
 def get_endpoint_schema(client=None, path: str = None, method: str = None, endpoint: str = None, **_) -> dict:
     path = path or endpoint  # accept either parameter name
     spec = _get_spec()

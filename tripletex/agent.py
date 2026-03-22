@@ -34,7 +34,7 @@ import knowledge
 from client import TripletexClient, TripletexError
 from config import settings
 from tools import GEMINI_TOOL, PLAN_TOOL, TOOL_MAP
-from tools.schema_tools import get_endpoint_schema
+from tools.schema_tools import get_endpoint_schema, get_required_params
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +99,13 @@ call_api:
 Currency: Tripletex operates in NOK. All amounts passed to the API must be in NOK. If the task involves foreign currencies, convert to NOK using the provided exchange rate before calling the API.
 
 Rules:
-- Follow the plan. Endpoint notes and schemas are already in the context below — read them before each write
+- Follow the plan. Endpoint context (schemas + notes) is pre-loaded below — read it before each write
+- Before creating any named entity (customer, product, supplier, project): GET first to check if it already exists by name or org number — skip creation if found
 - Use GET via call_api to fetch any IDs you need at runtime that are not in the reference data below
 - If you need to use an endpoint NOT in the plan (e.g. after an error): call list_endpoints to find it
+
+Voucher postings — every posting MUST have "row" starting at 1 (row 0 is system-reserved):
+{"date":"2024-01-01","postings":[{"row":1,"account":{"id":X},"amountGross":1000,"amountGrossCurrency":1000},{"row":1,"account":{"id":Y},"amountGross":-1000,"amountGrossCurrency":-1000}]}
 - Many resources have sub-resource endpoints (e.g. /order/orderline). If you already included those sub-resources in the parent body during creation, do NOT also call the sub-resource endpoint without first checking whether they already exist — it will create duplicates
 - If a write fails, read the error and fix it — one retry only
 - When a write succeeds, move on immediately — do NOT verify with a GET
@@ -324,40 +328,45 @@ def _load_reference_data(client: TripletexClient, plan: dict) -> str:
 
 def _build_context_block(plan: dict) -> str:
     """
-    Load schemas and notes for each endpoint in the plan.
-    Returns a formatted string injected into the executor's context.
+    Load schemas, required params, and notes for each endpoint in the plan.
+    Notes are co-located with their schema so the model reads them together.
     """
     endpoints_used = plan.get("endpoints_used", [])
     if not endpoints_used:
         return ""
 
-    schema_lines = []
-    note_lines = []
+    sections = []
 
     for ep in endpoints_used:
         path = ep.get("path", "")
         method = ep.get("method", "GET").upper()
         key = f"{method} {path}"
+        lines = [key]
 
-        # Load schema from openapi.json (no LLM call)
-        schema_result = get_endpoint_schema(path=path, method=method)
-        fields = schema_result.get("fields", [])
-        if fields:
-            field_names = ", ".join(f["name"] for f in fields)
-            schema_lines.append(f"{key}: {field_names}")
+        if method in ("POST", "PUT"):
+            schema_result = get_endpoint_schema(path=path, method=method)
+            fields = schema_result.get("fields", [])
+            if fields:
+                field_parts = []
+                for f in fields:
+                    desc = f.get("description", "")
+                    entry = f["name"]
+                    if desc:
+                        entry += f" ({desc[:80]})"
+                    field_parts.append(entry)
+                lines.append("  Fields: " + ", ".join(field_parts))
+        else:
+            required_params = get_required_params(path=path, method=method)
+            if required_params:
+                lines.append("  Required params: " + ", ".join(required_params))
 
-        # Load notes from SQLite
         notes = knowledge.get_notes(key)
         if notes:
-            note_lines.append(f"{key}:\n  {notes}")
+            lines.append(f"  ⚠ {notes}")
 
-    parts = []
-    if schema_lines:
-        parts.append("=== Endpoint schemas ===\n" + "\n".join(schema_lines))
-    if note_lines:
-        parts.append("=== Endpoint notes (known dependencies & gotchas) ===\n" + "\n".join(note_lines))
+        sections.append("\n".join(lines))
 
-    return "\n\n".join(parts)
+    return "=== Endpoint context ===\n" + "\n\n".join(sections)
 
 
 # ---------------------------------------------------------------------------
