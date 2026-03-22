@@ -2,9 +2,18 @@
 Tools for reading and writing endpoint-specific notes in the SQLite knowledge base.
 """
 
+import re
+
 from vertexai.generative_models import FunctionDeclaration
 
 import knowledge
+
+_NUMERIC_SEGMENT = re.compile(r"/\d+")
+
+
+def _normalize(endpoint: str) -> str:
+    """Replace numeric path segments with {id} so keys are generic."""
+    return _NUMERIC_SEGMENT.sub("/{id}", endpoint)
 
 
 GET_ENDPOINT_NOTES = FunctionDeclaration(
@@ -52,9 +61,9 @@ UPDATE_ENDPOINT_NOTES = FunctionDeclaration(
 
 
 def get_endpoint_notes(client=None, endpoint: str = None, path: str = None, method: str = None, **_) -> dict:
-    # Accept either a combined "POST /customer" string or separate path+method
     if not endpoint and path and method:
         endpoint = f"{method.upper()} {path}"
+    endpoint = _normalize(endpoint)
     notes = knowledge.get_notes(endpoint)
     if notes is None:
         return {"endpoint": endpoint, "notes": None, "message": "No notes found"}
@@ -62,5 +71,6 @@ def get_endpoint_notes(client=None, endpoint: str = None, path: str = None, meth
 
 
 def update_endpoint_notes(client=None, endpoint: str = None, notes: str = None, **_) -> dict:
+    endpoint = _normalize(endpoint)
     knowledge.upsert_notes(endpoint, notes)
     return {"ok": True, "endpoint": endpoint}
