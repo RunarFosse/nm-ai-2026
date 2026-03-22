@@ -202,7 +202,8 @@ def list_endpoints(client=None, tag: str = None, query: str = None, **_) -> dict
     return {"count": len(results), "results": results}
 
 
-def get_endpoint_schema(client=None, path: str = None, method: str = None, **_) -> dict:
+def get_endpoint_schema(client=None, path: str = None, method: str = None, endpoint: str = None, **_) -> dict:
+    path = path or endpoint  # accept either parameter name
     spec = _get_spec()
 
     spec_path = _match_spec_path(spec, path)

@@ -34,7 +34,7 @@ CREATE_PRODUCT = FunctionDeclaration(
 
 
 def list_products(client: TripletexClient, name: str = None, **_) -> dict:
-    params = {"fields": "id,name,number,priceExVat", "count": 100}
+    params = {"fields": "id,name,number,costExcludingVatCurrency", "count": 100}
     if name:
         params["name"] = name
     return client.get("/product", params=params)

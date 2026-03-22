@@ -108,6 +108,23 @@ ALL_DECLARATIONS = [
 
 GEMINI_TOOL = Tool(function_declarations=ALL_DECLARATIONS)
 
+# Read-only tool set for the research phase — no write operations
+RESEARCH_DECLARATIONS = [
+    LIST_EMPLOYEES,
+    LIST_CUSTOMERS,
+    LIST_PRODUCTS,
+    LIST_INVOICES,
+    LIST_PAYMENT_TYPES,
+    LIST_TRAVEL_EXPENSES,
+    LIST_PROJECTS,
+    LIST_DEPARTMENTS,
+    LIST_VOUCHERS,
+    LIST_ACCOUNTS,
+    LIST_ENDPOINTS,
+    GET_ENDPOINT_SCHEMA,
+]
+RESEARCH_TOOL = Tool(function_declarations=RESEARCH_DECLARATIONS)
+
 TOOL_MAP: dict = {
     "list_employees": list_employees,
     "create_employee": create_employee,
