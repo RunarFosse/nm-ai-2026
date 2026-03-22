@@ -4,6 +4,17 @@
 # Gemini
 .gemini
 
+# Ignore Data folders
+*data/
+
+# Ignore PyTorch and ONNX files, as well as zip
+*.pt
+*.onnx
+*.zip
+
+# Mac .DS_Store
+*.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
