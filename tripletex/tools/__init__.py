@@ -31,10 +31,9 @@ ALL_DECLARATIONS = [
 ]
 GEMINI_TOOL = Tool(function_declarations=ALL_DECLARATIONS)
 
-# Plan phase: discovery + notes only (no API calls)
+# Plan phase: endpoint discovery only (notes pre-loaded in code step)
 PLAN_DECLARATIONS = [
     LIST_ENDPOINTS,
-    GET_ENDPOINT_NOTES,
 ]
 PLAN_TOOL = Tool(function_declarations=PLAN_DECLARATIONS)
 

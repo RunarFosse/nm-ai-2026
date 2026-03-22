@@ -46,7 +46,7 @@ def _normalize_endpoint(method: str, path: str) -> str:
     return f"{method.upper()} {_NUMERIC_SEGMENT.sub('/{id}', path)}"
 
 TOTAL_BUDGET = 300  # seconds
-PLAN_MAX_TURNS = 15
+PLAN_MAX_TURNS = 5
 
 # ---------------------------------------------------------------------------
 # System prompts
@@ -66,23 +66,15 @@ Output ONLY valid JSON (no markdown fences):
 Include every piece of data you can find. Use null for unknown fields."""
 
 PLAN_SYSTEM_PROMPT = """\
-You are a Tripletex planning agent. Build an optimized execution plan in two phases.
-
-PHASE 1 — DISCOVER: For each operation in the task, call list_endpoints to find the exact API path.
-
-PHASE 2 — REFINE: For every write endpoint (POST/PUT/DELETE) found:
-  - Call get_endpoint_notes to check for known dependencies or requirements
-  - If a note says a prerequisite is needed (e.g. look up a vatType ID first), add that step to the plan
-  - Check if a batch endpoint exists for repeated similar operations and prefer it
-  - Remove any redundant steps
-
-Do not fetch live data. Do not call the same tool with the same arguments twice.
+You are a Tripletex endpoint discovery agent.
+Call list_endpoints to find the API paths needed to complete the task.
+Use tag= for top-level entities, query= for sub-resources or specific operations.
+Do not call the same tool twice with the same arguments.
 
 Output ONLY valid JSON (no markdown fences):
 {
   "endpoints_used": [{"path": "/customer", "method": "POST"}, ...],
-  "steps": ["step 1", "step 2", ...],
-  "notes": "anything unusual"
+  "steps": ["1. do X", "2. do Y"]
 }"""
 
 EXECUTION_SYSTEM_PROMPT = """\
@@ -99,16 +91,20 @@ call_api:
 Currency: Tripletex operates in NOK. All amounts passed to the API must be in NOK. If the task involves foreign currencies, convert to NOK using the provided exchange rate before calling the API.
 
 Rules:
-- Follow the plan. Endpoint context (schemas + notes) is pre-loaded below — read it before each write
-- Before creating any named entity (customer, product, supplier, project): GET first to check if it already exists by name or org number — skip creation if found
-- Use GET via call_api to fetch any IDs you need at runtime that are not in the reference data below
-- If you need to use an endpoint NOT in the plan (e.g. after an error): call list_endpoints to find it
+- Endpoint context (schemas + notes) is pre-loaded below — read it before each write
+- Reference data below contains pre-fetched IDs (accounts, employees, vatTypes, etc.) — use them DIRECTLY, do NOT re-fetch with GET
+- Before creating any named entity (customer, product, supplier, project): GET first to check if it already exists — skip creation if found
+- Use GET via call_api to fetch IDs you need that are NOT in the reference data
+- If you need an endpoint not in the context block: call list_endpoints to find it
 
-Voucher postings — every posting MUST have "row" starting at 1 (row 0 is system-reserved):
-{"date":"2024-01-01","postings":[{"row":1,"account":{"id":X},"amountGross":1000,"amountGrossCurrency":1000},{"row":1,"account":{"id":Y},"amountGross":-1000,"amountGrossCurrency":-1000}]}
+Voucher postings rules (ALWAYS follow these — not in the OpenAPI spec):
+- Every posting MUST have "row" as a unique integer starting at 1. Row 0 is system-reserved and causes 422
+- Postings must balance to zero (sum of amountGross = 0)
+- Required per posting: row, account.id, amountGross, amountGrossCurrency
+- Example: {"date":"2024-01-01","description":"desc","postings":[{"row":1,"account":{"id":X},"amountGross":1500,"amountGrossCurrency":1500},{"row":2,"account":{"id":Y},"amountGross":-1500,"amountGrossCurrency":-1500}]}
 - Many resources have sub-resource endpoints (e.g. /order/orderline). If you already included those sub-resources in the parent body during creation, do NOT also call the sub-resource endpoint without first checking whether they already exist — it will create duplicates
 - If a write fails, read the error and fix it — one retry only
-- When a write succeeds, move on immediately — do NOT verify with a GET
+- When a write succeeds, move on immediately — NEVER follow up with a GET to verify it
 - When all steps are done, stop
 
 Time:
@@ -269,15 +265,25 @@ def _build_user_parts(files: list[dict], text: str) -> list[Part]:
 
 
 _VAT_ENDPOINTS = {"/product", "/order", "/invoice", "/ledger/voucher", "/supplierInvoice"}
-_TRAVEL_ENDPOINTS = {"/travelExpense/cost"}
-_PROJECT_ENDPOINTS = {"/project"}
+_TRAVEL_ENDPOINTS = {"/travelExpense", "/travelExpense/cost", "/travelExpense/mileageAllowance"}
+_VOUCHER_ENDPOINTS = {"/ledger/voucher"}
 _TIMESHEET_ENDPOINTS = {"/timesheet/entry", "/timesheet/entry/list"}
+_EMPLOYEE_ENDPOINTS = {
+    "/project", "/timesheet/entry", "/timesheet/entry/list",
+    "/travelExpense", "/travelExpense/cost", "/travelExpense/mileageAllowance", "/employee",
+}
+_DEPARTMENT_ENDPOINTS = {"/project", "/department"}
 
 
-def _load_reference_data(client: TripletexClient, plan: dict) -> str:
-    """Pre-fetch reference data needed by the plan, injected into executor context."""
+def _load_reference_data(client: TripletexClient, plan: dict) -> tuple[str, set[str]]:
+    """
+    Pre-fetch reference data needed by the plan.
+    Returns (text_block, preloaded_paths) where preloaded_paths is the set of
+    API paths whose data is now in the text block (so context block can annotate them).
+    """
     paths = {ep.get("path", "") for ep in plan.get("endpoints_used", [])}
     lines = []
+    preloaded: set[str] = set()
 
     if paths & _VAT_ENDPOINTS:
         try:
@@ -288,6 +294,7 @@ def _load_reference_data(client: TripletexClient, plan: dict) -> str:
                     f"{v.get('name','')} {v.get('percentage','')}% → id={v['id']}" for v in vat_types
                 )
                 lines.append(f"VAT types: {formatted}")
+                preloaded.add("/ledger/vatType")
         except Exception as exc:
             logger.warning("Failed to pre-load vatTypes: %s", exc)
 
@@ -298,43 +305,81 @@ def _load_reference_data(client: TripletexClient, plan: dict) -> str:
             if payment_types:
                 formatted = ", ".join(f"{p.get('name','')} → id={p['id']}" for p in payment_types)
                 lines.append(f"Travel expense payment types: {formatted}")
+                preloaded.add("/travelExpense/paymentType")
         except Exception as exc:
             logger.warning("Failed to pre-load travel paymentTypes: %s", exc)
 
-    if paths & _PROJECT_ENDPOINTS:
+    if paths & _EMPLOYEE_ENDPOINTS:
         try:
-            result = client.get("/project", params={"fields": "projectManager", "count": 1})
-            values = result.get("values") or []
-            if values and values[0].get("projectManager"):
-                pm = values[0]["projectManager"]
-                lines.append(f"Valid project manager id: {pm['id']} — use this, do not guess")
+            result = client.get("/employee", params={"fields": "id,firstName,lastName", "count": 50})
+            employees = result.get("values") or []
+            if employees:
+                formatted = ", ".join(
+                    f"{e.get('firstName','')} {e.get('lastName','')} → id={e['id']}" for e in employees
+                )
+                lines.append(f"Employees: {formatted}")
+                preloaded.add("/employee")
         except Exception as exc:
-            logger.warning("Failed to pre-load project manager: %s", exc)
+            logger.warning("Failed to pre-load employees: %s", exc)
 
     if paths & _TIMESHEET_ENDPOINTS:
         try:
-            result = client.get("/activity", params={"fields": "id,name", "count": 20})
+            result = client.get("/activity", params={"fields": "id,name", "count": 50})
             activities = result.get("values") or []
             if activities:
                 formatted = ", ".join(f"{a.get('name','')} → id={a['id']}" for a in activities)
                 lines.append(f"Activities: {formatted}")
+                preloaded.add("/activity")
         except Exception as exc:
             logger.warning("Failed to pre-load activities: %s", exc)
 
+    if paths & _VOUCHER_ENDPOINTS:
+        try:
+            result = client.get(
+                "/ledger/account",
+                params={"fields": "id,number,name", "isInactive": False, "count": 100},
+            )
+            accounts = result.get("values") or []
+            if accounts:
+                formatted = ", ".join(
+                    f"{a.get('number','')} {a.get('name','')} → id={a['id']}" for a in accounts
+                )
+                lines.append(f"Ledger accounts: {formatted}")
+                preloaded.add("/ledger/account")
+        except Exception as exc:
+            logger.warning("Failed to pre-load ledger accounts: %s", exc)
+
+    if paths & _DEPARTMENT_ENDPOINTS:
+        try:
+            result = client.get("/department", params={"fields": "id,name", "count": 50})
+            departments = result.get("values") or []
+            if departments:
+                formatted = ", ".join(f"{d.get('name','')} → id={d['id']}" for d in departments)
+                lines.append(f"Departments: {formatted}")
+                preloaded.add("/department")
+        except Exception as exc:
+            logger.warning("Failed to pre-load departments: %s", exc)
+
     if not lines:
-        return ""
-    return "=== Reference data (account-specific ids — use directly, do not re-fetch) ===\n" + "\n".join(lines)
+        return "", preloaded
+    return (
+        "=== Reference data (pre-fetched — use IDs directly, skip GET calls for these) ===\n"
+        + "\n".join(lines)
+    ), preloaded
 
 
-def _build_context_block(plan: dict) -> str:
+def _build_context_block(plan: dict, preloaded_paths: set[str] = None) -> str:
     """
     Load schemas, required params, and notes for each endpoint in the plan.
     Notes are co-located with their schema so the model reads them together.
+    preloaded_paths: paths whose data is already in the reference data block —
+                     GET endpoints for these are annotated to skip.
     """
     endpoints_used = plan.get("endpoints_used", [])
     if not endpoints_used:
         return ""
 
+    preloaded_paths = preloaded_paths or set()
     sections = []
 
     for ep in endpoints_used:
@@ -356,13 +401,19 @@ def _build_context_block(plan: dict) -> str:
                     field_parts.append(entry)
                 lines.append("  Fields: " + ", ".join(field_parts))
         else:
-            required_params = get_required_params(path=path, method=method)
-            if required_params:
-                lines.append("  Required params: " + ", ".join(required_params))
+            if path in preloaded_paths:
+                lines.append("  ⚠ Data pre-loaded in reference section above — SKIP this GET, use those IDs directly")
+            else:
+                required_params = get_required_params(path=path, method=method)
+                if required_params:
+                    lines.append("  Required params: " + ", ".join(required_params))
 
         notes = knowledge.get_notes(key)
         if notes:
+            logger.info("KB note loaded for %s: %s", key, notes[:200])
             lines.append(f"  ⚠ {notes}")
+        else:
+            logger.info("KB note: none for %s", key)
 
         sections.append("\n".join(lines))
 
@@ -375,9 +426,9 @@ def _build_context_block(plan: dict) -> str:
 
 _RULE_WRITER_PROMPT = (
     "You update a knowledge base for a Tripletex API agent. "
-    "Given an endpoint and a 422 error response, produce a concise rule "
-    "explaining what is required or what dependency must be satisfied first. "
-    "Output ONLY the rule text (1-3 sentences, no JSON, no markdown)."
+    "Given an endpoint and a 422 error response, produce a single concise sentence "
+    "explaining what went wrong and what is required. "
+    "Output ONLY that sentence (no JSON, no markdown, no preamble)."
 )
 
 
@@ -389,14 +440,16 @@ def _write_rules_async(model_name: str, pending: list[tuple[str, dict]]) -> None
             existing = knowledge.get_notes(endpoint_key) or ""
             rule_prompt = (
                 f"Endpoint: {endpoint_key}\n"
-                f"Existing notes: {existing or '(none)'}\n"
                 f"422 error: {json.dumps(error_body, ensure_ascii=False)[:600]}\n\n"
-                "Write the updated notes for this endpoint (include existing notes + new rule):"
+                "Write a single sentence describing what is required:"
             )
             try:
                 resp = rule_writer.generate_content(rule_prompt)
-                knowledge.upsert_notes(endpoint_key, resp.text.strip())
-                logger.info("Knowledge: updated notes for %s", endpoint_key)
+                new_rule = resp.text.strip()
+                # Append to existing notes rather than overwriting
+                updated = (existing + "\n" + new_rule).strip() if existing else new_rule
+                knowledge.upsert_notes(endpoint_key, updated)
+                logger.info("Knowledge: appended note for %s: %s", endpoint_key, new_rule[:100])
             except Exception as exc:
                 logger.warning("Knowledge: failed to write notes for %s: %s", endpoint_key, exc)
     except Exception as exc:
@@ -458,11 +511,16 @@ def run_agent(prompt: str, client: TripletexClient, files: list[dict] = None) ->
         logger.info("Plan: %s", json.dumps(plan, ensure_ascii=False)[:500])
 
     # -------------------------------------------------------------------------
-    # Code step: pre-load schemas + notes for planned endpoints
+    # Code step: pre-load reference data + schemas + notes for planned endpoints
+    # Reference data is loaded first so context block can annotate pre-loaded GETs.
     # -------------------------------------------------------------------------
-    context_block = _build_context_block(plan)
+    ref_data, preloaded_paths = _load_reference_data(client, plan)
+    if ref_data:
+        logger.info("Reference data:\n%s", ref_data)
+
+    context_block = _build_context_block(plan, preloaded_paths=preloaded_paths)
     if context_block:
-        logger.info("Context block built (%d chars)", len(context_block))
+        logger.info("Context block:\n%s", context_block)
 
     # -------------------------------------------------------------------------
     # Phase 2: Execute (Pro, GEMINI_TOOL)
@@ -473,12 +531,12 @@ def run_agent(prompt: str, client: TripletexClient, files: list[dict] = None) ->
     )
     exec_chat = executor.start_chat(response_validation=False)
 
-    ref_data = _load_reference_data(client, plan)
-
     exec_prompt = f"{_time_context(start)}\n\nTask: {prompt}"
     if extracted_data:
         exec_prompt += f"\n\nExtracted data:\n{json.dumps(extracted_data, ensure_ascii=False, indent=2)}"
-    exec_prompt += f"\n\nPlan:\n{json.dumps(plan, ensure_ascii=False, indent=2)}"
+    steps = plan.get("steps", [])
+    if steps:
+        exec_prompt += "\n\nSteps:\n" + "\n".join(steps)
     if context_block:
         exec_prompt += f"\n\n{context_block}"
     if ref_data:
@@ -496,7 +554,7 @@ def run_agent(prompt: str, client: TripletexClient, files: list[dict] = None) ->
         _normalize_endpoint(ep.get("method", "GET"), ep.get("path", ""))
         for ep in plan.get("endpoints_used", [])
     }
-    _, exec_turns = _run_tool_loop(exec_chat, client, exec_parts, GEMINI_TOOL, on_422=_on_422, planned_keys=planned_keys)
+    _, exec_turns = _run_tool_loop(exec_chat, client, exec_parts, GEMINI_TOOL, max_turns=15, on_422=_on_422, planned_keys=planned_keys)
     logger.info("Execute phase: %d turns", exec_turns)
 
     logger.info(
