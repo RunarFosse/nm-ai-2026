@@ -7,6 +7,10 @@ Model parameters for Norgesgruppen Data Task:
 
 [https://huggingface.co/RunarFosse/nm-ai-2026](https://huggingface.co/RunarFosse/nm-ai-2026)
 
+Model for Astar Island Task:
+
+[https://huggingface.co/snorretheman/bayesianmodeltype/tree/main](https://huggingface.co/snorretheman/bayesianmodeltype/tree/main)
+
 ## Quick start
 
 Create a Python virtual environment:
