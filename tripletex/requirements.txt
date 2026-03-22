@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+google-cloud-aiplatform>=1.70
+google-cloud-storage
+requests
+python-dotenv
+httpx
+pytest
